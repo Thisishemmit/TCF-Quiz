@@ -1,9 +1,12 @@
-let score = 0;
-let level = 0;
-let timer = 5;
-let active = 0;
-let currentInterval = null;
-let currentTimeOut = null;
+let Score = 0;
+let Level = 0;
+let Active = 0;
+let Timer = 0;
+let CurrentInterval = null;
+let CurrentTimeOut = null;
+let CanGoNext = false;
+let Freezed = false;
+let CurrentQuestion = null
 function press(element, color = true) {
     element.classList.add('top-1', 'left-1');
     if (color) {
@@ -14,27 +17,30 @@ function release(element) {
     element.classList.remove('top-1', 'left-1', 'bg-[#A3FF3A]');
 }
 function setActive(element) {
-    if (freezed) {
+    if (Freezed) {
         return;
     }
-    const answerBtns = document.querySelectorAll('.answer-btn');
-    answerBtns.forEach(btn => {
-        release(btn);
-    })
+    clearInterval(CurrentInterval);
+    clearTimeout(CurrentTimeOut);
     press(element.querySelector('.answer-btn'));
-    active = element.dataset.answer;
+    Active = element.dataset.answer;
+    if (CurrentQuestion.answers[Active].correct) {
+        correctAnswer();
+    } else {
+        wrongAnswer();
+    }
+    Freezed = true;
+    CanGoNext = true;
 }
-let freezed = false;
-let currentQuestion = null;
 
 
 function nextQuestion() {
-    let { answers, question } = questions[level];
+    let { answers, question } = questions[Level];
     const correctAnswer = answers.find(answer => answer.correct);
     answers = shuffle(answers);
     answers = answers.filter(answer => !answer.correct).slice(0, 3).concat(correctAnswer);
     answers = shuffle(answers);
-    currentQuestion = {
+    CurrentQuestion = {
         question,
         answers
     };
@@ -43,9 +49,11 @@ function nextQuestion() {
 function displayQuestion() {
     let questionContainer = document.querySelector('.question');
     let answersContainer = document.querySelectorAll('.answer-container  span');
-    questionContainer.textContent = currentQuestion.question;
+    let questionCounter = document.querySelector('.question-counter');
+    questionCounter.textContent = `Question ${Level + 1}/${questions.length}`;
+    questionContainer.textContent = CurrentQuestion.question;
     answersContainer.forEach((container, index) => {
-        const answer = currentQuestion.answers[index];
+        const answer = CurrentQuestion.answers[index];
 
         container.textContent = answer.text;
         container.parentNode.parentNode.dataset.answer = index;
@@ -64,129 +72,161 @@ function shuffle(array) {
 }
 
 function submit() {
-    if (freezed) {
+    if (!CanGoNext) {
         return;
     }
-    clearInterval(currentInterval);
-    clearTimeout(currentTimeOut);
-    if (active === null) return;
-    if (currentQuestion.answers[active].correct) {
-        correctAnswer();
-    } else {
-        wrongAnswer();
+    Level++;
+    if (Level === questions.length) {
+        endGame();
+        return;
     }
-    level++;
+    const answerBtns = [...document.querySelectorAll('.answer-btn')];
+    answerBtns.forEach(btn => {
+        press(btn, false);
+    });
+    setTimeout(() => {
+        nextQuestion();
+        displayQuestion();
+        answerBtns.forEach(btn => {
+            release(btn);
+        })
+        Freezed = false;
+        Active = null;
+    }, 500);
+    CanGoNext = false;
 }
 
 function correctAnswer() {
-    score++;
-    freezed = true;
-
+    Score++;
     const answerBtns = [...document.querySelectorAll('.answer-btn')];
-    const correctAnsIndex = answerBtns.findIndex(btn => btn.parentNode.dataset.answer === currentQuestion.answers.findIndex(answer => answer.correct).toString());
-    answerBtns.filter(btn => btn.parentNode.dataset.answer !== active).forEach(btn => {
+    const correctAnsIndex = answerBtns.findIndex(btn => btn.parentNode.dataset.answer === CurrentQuestion.answers.findIndex(answer => answer.correct).toString());
+    answerBtns.filter(btn => btn.parentNode.dataset.answer !== Active).forEach(btn => {
         if (btn.parentNode.dataset.answer === correctAnsIndex) {
             return;
         }
         btn.classList.add('bg-gray-200');
         btn.previousElementSibling.classList.add('bg-gray-500');
     });
-    setTimeout(() => {
-        answerBtns.forEach(btn => {
-            press(btn, false);
-        });
-        setTimeout(() => {
-            nextQuestion();
-            displayQuestion();
-            answerBtns.forEach(btn => {
-                release(btn);
-            })
-            active = null;
-            freezed = false;
-        }, 500);
-    }, 1000);
+    addToHistory('correct', CurrentQuestion.question, CurrentQuestion.answers, Active, Timer);
 }
 
 function wrongAnswer() {
-    freezed = true;
-    // logic to press all buttons then disaturate the wrong answers except the correct one which be released end disable clicking
+
     const answerBtns = [...document.querySelectorAll('.answer-btn')];
-    answerBtns.filter(btn => btn.parentNode.dataset.answer === active).forEach(btn => {
-        btn.classList.add('bg-red-500');
-        btn.previousElementSibling.classList.add('bg-red-800');
-        release(btn);
+
+    answerBtns.forEach(btn => {
+        if (btn.parentNode.dataset.answer === Active) {
+            btn.classList.add('bg-red-500');
+            btn.previousElementSibling.classList.add('bg-red-800');
+        } else {
+            btn.classList.add('bg-gray-200');
+            btn.previousElementSibling.classList.add('bg-gray-500');
+        }
     });
-    answerBtns.filter(btn => btn.parentNode.dataset.answer !== active).forEach(btn => {
-        btn.classList.add('bg-gray-200');
-        btn.previousElementSibling.classList.add('bg-gray-500');
-    });
-    const correctAnsIndex = answerBtns.findIndex(btn => btn.parentNode.dataset.answer === currentQuestion.answers.findIndex(answer => answer.correct).toString());
+    const correctAnsIndex = answerBtns
+        .findIndex(btn => btn.parentNode.dataset.answer === CurrentQuestion.answers
+            .findIndex(answer => answer.correct)
+            .toString()
+        );
     answerBtns[correctAnsIndex].classList.remove('bg-gray-200');
     answerBtns[correctAnsIndex].previousElementSibling.classList.remove('bg-gray-500');
-    setTimeout(() => {
-        answerBtns.forEach(btn => {
-            press(btn, false);
-        });
-        setTimeout(() => {
-            nextQuestion();
-            displayQuestion();
-            answerBtns.forEach(btn => {
-                release(btn);
-            })
-            active = null;
-            freezed = false;
-        }, 500);
-    }, 1000);
+    addToHistory('wrong', CurrentQuestion.question, CurrentQuestion.answers, Active, null);
 }
 
 function timeReached() {
-    freezed = true;
-    clearInterval(currentInterval);
-    clearTimeout(currentTimeOut);
+    Freezed = true;
+    clearInterval(CurrentInterval);
+    clearTimeout(CurrentTimeOut);
     const answerBtns = [...document.querySelectorAll('.answer-btn')];
-    answerBtns.forEach(btn => {
-        release(btn);
-    });
-    const correctAnsIndex = answerBtns.findIndex(btn => btn.parentNode.dataset.answer === currentQuestion.answers.findIndex(answer => answer.correct).toString());
+    const correctAnsIndex = answerBtns
+        .findIndex(btn => btn.parentNode.dataset.answer === CurrentQuestion.answers
+            .findIndex(answer => answer.correct)
+            .toString()
+        );
     answerBtns[correctAnsIndex].classList.add('bg-green-200');
     answerBtns[correctAnsIndex].previousElementSibling.classList.add('bg-green-500');
 
-    answerBtns.filter(btn => btn.parentNode.dataset.answer !== correctAnsIndex).forEach(btn => {
+    answerBtns.forEach(btn => {
+        if (btn.parentNode.dataset.answer === correctAnsIndex) {
+            return;
+        }
         btn.classList.add('bg-gray-200');
         btn.previousElementSibling.classList.add('bg-gray-500');
     });
-
-    setTimeout(() => {
-        answerBtns.forEach(btn => {
-            press(btn, false);
-        });
-        setTimeout(() => {
-            nextQuestion();
-            displayQuestion();
-            answerBtns.forEach(btn => {
-                release(btn);
-            })
-            active = null;
-            freezed = false;
-        }, 500);
-    }, 1000);
+    addToHistory('timeout', CurrentQuestion.question, CurrentQuestion.answers, null, null);
+    CanGoNext = true;
 }
 
 function startTimer() {
-    timer = 5;
-    const timerElement = document.querySelector('.timer');
-    timerElement.textContent = timer.toString() + 's';
-    currentInterval = setInterval(() => {
-        timer--;
-        timerElement.textContent = timer.toString() + 's';
-        if (timer === 0) {
+    Timer = 5;
+    const TimerElement = document.querySelector('.timer');
+    TimerElement.textContent = Timer.toString() + 's';
+    CurrentInterval = setInterval(() => {
+        Timer--;
+        TimerElement.textContent = Timer.toString() + 's';
+        if (Timer === 0) {
             timeReached();
         }
     }, 1000);
 }
 
-
 function startGame() {
     nextQuestion();
     displayQuestion();
 }
+
+function endGame() {
+    displayResults();
+}
+function resetGame() {
+    Score = 0;
+    Level = 0;
+    Active = 0;
+    Timer = 0;
+    CurrentInterval = null;
+    CurrentTimeOut = null;
+    CanGoNext = false;
+    Freezed = false;
+    CurrentQuestion = null;
+    localStorage.setItem('history', JSON.stringify([]));
+    startGame();
+}
+function addToHistory(type, question, answers, choice, time) {
+    const history = JSON.parse(localStorage.getItem('history')) || [];
+    history.push({
+        type,
+        question,
+        answers,
+        choice,
+        time
+    });
+    localStorage.setItem('history', JSON.stringify(history));
+}
+
+function printResults() {
+    const originalContent = document.body.innerHTML
+    const classesToRemove = ['header']
+    const idsToRemove = ['q-a-page', 'starting-page', 'download-btn']
+    classesToRemove.forEach(className => {
+        const elements = document.querySelectorAll(`.${className}`)
+        elements.forEach(element => {
+            element.remove()
+        })
+    })
+    document.body.querySelectorAll('*').forEach(element => {
+        if (idsToRemove.includes(element.id)) {
+            element.remove()
+        }
+        if (element.classList.contains('download-btn')) {
+            element.remove()
+        }
+    })
+
+    document.body.querySelector('#results-page').classList.remove('h-screen', "fixed", "-translate-y-full")
+    console.log(document.body)
+
+    window.print()
+    document.body.innerHTML = originalContent
+}
+
+
