@@ -2,8 +2,8 @@ let Score = 0;
 let Level = 0;
 let Active = 0;
 let Timer = 0;
-let CurrentInterval = null;
-let CurrentTimeOut = null;
+let Intervals = [];
+let TimeOuts = [];
 let CanGoNext = false;
 let Freezed = false;
 let CurrentQuestion = null
@@ -13,15 +13,20 @@ function press(element, color = true) {
         element.classList.add('bg-[#A3FF3A]');
     }
 }
+
 function release(element) {
     element.classList.remove('top-1', 'left-1', 'bg-[#A3FF3A]');
 }
+
 function setActive(element) {
     if (Freezed) {
         return;
     }
-    clearInterval(CurrentInterval);
-    clearTimeout(CurrentTimeOut);
+
+    Intervals.forEach(interval => {
+        clearInterval(interval);
+    });
+
     press(element.querySelector('.answer-btn'));
     Active = element.dataset.answer;
     if (CurrentQuestion.answers[Active].correct) {
@@ -32,7 +37,6 @@ function setActive(element) {
     Freezed = true;
     CanGoNext = true;
 }
-
 
 function nextQuestion() {
     let { answers, question } = questions[Level];
@@ -135,8 +139,9 @@ function wrongAnswer() {
 
 function timeReached() {
     Freezed = true;
-    clearInterval(CurrentInterval);
-    clearTimeout(CurrentTimeOut);
+    Intervals.forEach(interval => {
+        clearInterval(interval);
+    });
     const answerBtns = [...document.querySelectorAll('.answer-btn')];
     const correctAnsIndex = answerBtns
         .findIndex(btn => btn.parentNode.dataset.answer === CurrentQuestion.answers
@@ -161,16 +166,19 @@ function startTimer() {
     Timer = 5;
     const TimerElement = document.querySelector('.timer');
     TimerElement.textContent = Timer.toString() + 's';
-    CurrentInterval = setInterval(() => {
+    Intervals.push(setInterval(() => {
         Timer--;
         TimerElement.textContent = Timer.toString() + 's';
         if (Timer === 0) {
             timeReached();
         }
-    }, 1000);
+    }, 1000));
 }
 
 function startGame() {
+    Intervals.forEach(interval => {
+        clearInterval(interval);
+    });
     nextQuestion();
     displayQuestion();
 }
@@ -178,19 +186,29 @@ function startGame() {
 function endGame() {
     displayResults();
 }
+
 function resetGame() {
     Score = 0;
     Level = 0;
     Active = 0;
     Timer = 0;
-    CurrentInterval = null;
-    CurrentTimeOut = null;
+    Intervals.forEach(interval => {
+        clearInterval(interval);
+    });
+    TimeOuts.forEach(timeout => {
+        clearTimeout(timeout);
+    });
     CanGoNext = false;
     Freezed = false;
     CurrentQuestion = null;
     localStorage.setItem('history', JSON.stringify([]));
-    startGame();
+    const answerBtns = [...document.querySelectorAll('.answer-btn')];
+    answerBtns.forEach(btn => {
+        release(btn);
+
+    });
 }
+
 function addToHistory(type, question, answers, choice, time) {
     const history = JSON.parse(localStorage.getItem('history')) || [];
     history.push({
